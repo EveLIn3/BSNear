@@ -33,17 +33,30 @@
         frameSize = 100;
 
         behaviors =["walk", "crouches", "still"];
+        var current_behavior_state = "still";
+
+        var spike_begin = false;
+        var actually_staying_still = false;
+        var spike_start_step = 0;
+        var spike_end_step = 0;
+
         priors = {};
         priors["walk"] = 0.4;
         priors["still"] = 0.4;
         priors["crouch"] = 0.2;
         behaviorsCounts = {};
+        behaviorsDetailCounts = {};
         mean_mu_params = {};
         mean_var_params = {};
         variance_mu_params = {};
         variance_var_params = {};
+        spike_threshold_params = {};
+
         var steps = 0;
+        var steps2 = 0;
         var scale = 0.001;
+        var sensitivity_level = 0.75;
+        var minimum_interval_steps = 1;
 
         axs = [];
         ays = [];
@@ -68,6 +81,7 @@
                 for (var i = 0; i < behaviors.length; i++) {
                     var behavior = behaviors[i];
                     behaviorsCounts[behavior] = 0;
+                    behaviorsDetailCounts[behavior] = 0;
                     var fileName = "saved_" + behavior + "_params.csv";
                     $.ajax({
                         type: "GET",
@@ -137,10 +151,16 @@
         function readTrainedParams(behavior, data) {
             var lines = data.split(/\r\n|\n/);
             mean_mu_params[behavior] = lines[0].split(',');
-            console.log("mean_mu of still: " + mean_mu_params['still']);
             mean_var_params[behavior] = lines[1].split(',');
             variance_mu_params[behavior] = lines[2].split(',');
             variance_var_params[behavior] = lines[3].split(',');
+            var max_values = lines[4].split(',');
+            var peak_threshold_values = [];
+            for (var i = 0; i < max_values.length; i++) {
+                var threshold_value = mean_mu_params[behavior][i] * 1 + (sensitivity_level * (max_values[i] - mean_mu_params[behavior][i]));
+                peak_threshold_values.push(threshold_value);
+            }
+            spike_threshold_params[behavior] = peak_threshold_values;
 //            var num = Object.keys(mean_mu_params).length;
 //            window.alert(num)
         }
@@ -170,8 +190,14 @@
                     maxP = prob;
                     behav = key;
                 }
-            })
+            });
             return behav;
+        }
+
+        function isLowerThanThreshold(value, threshold) {
+            if (threshold < 0) {
+
+            }
         }
 
         function handleIMUNotifications(event) {
@@ -193,6 +219,39 @@
             if (mx < 0) mx *= -1;
             if (my < 0) my *= -1;
             if (mz < 0) mz *= -1;
+
+//            if (current_behavior_state!="still") {
+//                if (!spike_begin && ay >= spike_threshold_params[current_behavior_state][1]) {
+//                    spike_begin = true;
+//                } else if (spike_begin && ay <= spike_threshold_params[current_behavior_state][1]) {
+//                    spike_begin = false;
+//                    behaviorsDetailCounts[current_behavior_state] += 1;
+//                    document.getElementById(current_behavior_state+"count").innerHTML = current_behavior_state + ": " + behaviorsDetailCounts[current_behavior_state];
+//                } else if (!spike_begin && steps==(frameSize-1)){
+//                    actually_staying_still = true;
+//                    current_behavior_state = "still";
+//                }
+//            }
+
+            // can add timer to get rid of multiple small spikes
+            if (!spike_begin && ay >= spike_threshold_params[current_behavior_state][1]) {
+                spike_begin = true; // detected a possible spike
+                spike_start_step = steps;
+            } else if (spike_begin && ay <= spike_threshold_params[current_behavior_state][1]) {
+//                if(steps - spike_start_step > minimum_interval_steps) {
+//                }
+                behaviorsDetailCounts[current_behavior_state] += 1;
+                steps2 = 0;
+                document.getElementById(current_behavior_state+"count").innerHTML = current_behavior_state + ": " + behaviorsDetailCounts[current_behavior_state];
+                spike_begin = false;
+                actually_staying_still = false; // detected the end of a spike
+            } else if (!spike_begin && steps2 > (frameSize + 100) && current_behavior_state!="still"){
+                console.log("actually still...")
+                actually_staying_still = true;
+                behaviorsDetailCounts[current_behavior_state] -= 1;  // undone the wrong counting
+                current_behavior_state = "still";
+                steps2 = 0;
+            }
 
             axs.push(ax);
             ays.push(ay);
@@ -255,11 +314,18 @@
                 }
 
                 var predictedBehavior = getMostLikelyBehavior(probabilities);
-                behaviorsCounts[predictedBehavior] += 1;
-                console.log(predictedBehavior);
-                document.getElementById(predictedBehavior).innerHTML = predictedBehavior + ": " + behaviorsCounts[predictedBehavior];
+                if (actually_staying_still) {
+                    current_behavior_state = "still";
+                } else {
+                    current_behavior_state = predictedBehavior;
+                }
+                behaviorsCounts[current_behavior_state] += 1;
+                console.log(current_behavior_state);
+                document.getElementById(current_behavior_state).innerHTML = current_behavior_state + ": " + behaviorsCounts[current_behavior_state];
 
-
+                if (steps2 > frameSize + 100) {
+                    spike_begin = false;
+                }
 
                 steps = 0;
                 axs = [];
@@ -274,7 +340,7 @@
             }
 
             steps += 1;
-
+            steps2 += 1;
 
             LineGraph_AddData(0, 0, ax);
             LineGraph_AddData(0, 1, ay);
@@ -585,6 +651,10 @@
     </tr>
 </table>
 <canvas id="detection_canvas" width="1024" height="120" hidden="1"><br/> </canvas>
+
+<div id="walkcount">walkcount</div><br/>
+<div id="crouchescount">crouchescount</div><br/>
+<div id="stillcount">crouchescount</div><br/>
 
 <div id="walk"></div><br/>
 <div id="crouches"></div><br/>

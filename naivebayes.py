@@ -4,7 +4,7 @@ import math
 import numpy as np
 import matplotlib.pyplot as plt
 
-behavior = 'crouches'
+behavior = 'still'
 
 file = open(behavior+'.csv', 'r')  # read the dataset
 lines = file.readlines()
@@ -23,6 +23,7 @@ mag_z_list = []
 
 mean_matrix = []
 var_matrix = []
+max_matrix = []
 
 window_size = 100
 print("# of windows in the data: {}".format(math.ceil(len(lines) / window_size)))
@@ -73,6 +74,18 @@ for line in lines:  # read the lines in the file initially
         var_row_list.append(np.var(mag_z_list))
         var_matrix.append(var_row_list)
 
+        max_row_list = []
+        max_row_list.append(np.max(acc_x_list))
+        max_row_list.append(np.max(acc_y_list))
+        max_row_list.append(np.max(acc_z_list))
+        max_row_list.append(np.max(gyro_x_list))
+        max_row_list.append(np.max(gyro_y_list))
+        max_row_list.append(np.max(gyro_z_list))
+        max_row_list.append(np.max(mag_x_list))
+        max_row_list.append(np.max(mag_y_list))
+        max_row_list.append(np.max(mag_z_list))
+        max_matrix.append(max_row_list)
+
         # avg on each window or the whole?
         acc_x_list = []
         acc_y_list = []
@@ -94,6 +107,8 @@ averaged_var = np.rint(np.mean(var_matrix, axis=0))
 variance_mean = np.rint(np.var(mean_matrix, axis=0))
 variance_var = np.rint(np.var(var_matrix, axis=0))
 
+averaged_max = np.rint(np.mean(max_matrix, axis=0))
+
 print("Mean of Feature mu of "+behavior+" is:")
 print(averaged_mean)
 print("Mean of Feature var of "+behavior+" is:")
@@ -111,6 +126,7 @@ with open(outputFileName, 'w', newline='') as outputFile:
     csvWriter.writerow(averaged_var)
     csvWriter.writerow(variance_mean)
     csvWriter.writerow(variance_var)
+    csvWriter.writerow(averaged_max)
 
 plt.plot(acc_x_list)
 plt.plot(acc_y_list)
